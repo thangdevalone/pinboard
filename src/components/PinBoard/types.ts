@@ -8,6 +8,7 @@ export interface IVideoItem {
   isVideoMuted?: boolean;
   isPresenter?: boolean; // Indicates if this is a presenter
   color?: string;
+  videoUrl?: string; // URL for video stream
 }
 
 export interface IPinnedVideo extends IVideoItem {
@@ -25,8 +26,10 @@ export interface VideoPinBoardProps {
 export interface VideoItemProps {
   video: IVideoItem;
   isPinned?: boolean;
+  isPresenter?: boolean;
   onClick?: () => void;
   onPinClick?: () => void;
+  onPresentClick?: () => void;
   className?: string;
 }
 

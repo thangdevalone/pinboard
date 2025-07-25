@@ -1,100 +1,135 @@
 import HybridPinBoard from './HybridPinBoard';
 import type {IVideoItem} from './types';
+import SimpleControls from './SimpleControls.tsx';
+import * as React from 'react';
+
+const sampleVideos: IVideoItem[] = [
+  {
+    id: 'host',
+    title: 'Meeting Host',
+    participant: 'Sarah Wilson (Host)',
+    isPresenter: false,
+    color: 'bg-gradient-to-br from-purple-500 to-pink-600',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+  },
+  {
+    id: 'presenter',
+    title: 'Presenter',
+    participant: 'John Smith (Presenter)',
+    isPresenter: true,
+    color: 'bg-gradient-to-br from-blue-500 to-cyan-600',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+  },
+  {
+    id: 'screenshare',
+    title: 'Screen Share',
+    participant: 'Emily Chen',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+  },
+  {
+    id: 'participant2',
+    title: 'Designer',
+    participant: 'Mike Johnson',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
+  },
+  {
+    id: 'participant3',
+    title: 'Developer',
+    participant: 'Lisa Park',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4'
+  },
+  {
+    id: 'participant4',
+    title: 'Product Manager',
+    participant: 'David Brown',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4'
+  },
+  {
+    id: 'participant5',
+    title: 'QA Engineer',
+    participant: 'Anna Garcia',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4'
+  },
+  {
+    id: 'participant6',
+    title: 'Marketing',
+    participant: 'Tom Wilson',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4'
+  },
+  {
+    id: 'participant7',
+    title: 'Sales',
+    participant: 'Rachel Green',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4'
+  },
+  {
+    id: 'participant8',
+    title: 'Support',
+    participant: 'Kevin Lee',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'
+  },
+  {
+    id: 'participant9',
+    title: 'HR',
+    participant: 'Jessica Wang',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4'
+  },
+  {
+    id: 'participant10',
+    title: 'Finance',
+    participant: 'Robert Kim',
+    isPresenter: false,
+    videoUrl: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4'
+  }
+];
+
+const getRandomVideos = (count: number): IVideoItem[] => {
+  const result: IVideoItem[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const base = sampleVideos[i % sampleVideos.length];
+    result.push({
+      ...base,
+      id: `${base.id}-${i}`, // ensure unique ID
+      title: `${base.title} ${i + 1}`,
+      participant: `${base.participant} ${i + 1}`,
+      isPresenter: i === 1
+    });
+  }
+
+  return result;
+};
 
 export const HybridPinBoardDemo = () => {
-  const customVideos: IVideoItem[] = [
-    {
-      id: 'host',
-      title: 'Meeting Host',
-      participant: 'Sarah Wilson (Host)',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-purple-500 to-pink-600'
-    },
-    {
-      id: 'presenter',
-      title: 'Presenter',
-      participant: 'John Smith (Presenter)',
-      isPresenter: true,
-      color: 'bg-gradient-to-br from-blue-500 to-cyan-600'
-    },
-    {
-      id: 'screenshare',
-      title: 'Screen Share',
-      participant: 'Emily Chen (Screen Share)',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-green-500 to-teal-600'
-    },
-    {
-      id: 'participant2',
-      title: 'Designer',
-      participant: 'Mike Johnson',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-orange-500 to-red-600'
-    },
-    {
-      id: 'participant3',
-      title: 'Developer',
-      participant: 'Lisa Park',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-indigo-500 to-purple-600'
-    },
-    {
-      id: 'participant4',
-      title: 'Product Manager',
-      participant: 'David Brown',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-teal-500 to-green-600'
-    },
-    {
-      id: 'participant5',
-      title: 'QA Engineer',
-      participant: 'Anna Garcia',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-pink-500 to-rose-600'
-    },
-    {
-      id: 'participant6',
-      title: 'Marketing',
-      participant: 'Tom Wilson',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-yellow-500 to-orange-600'
-    },
-    {
-      id: 'participant7',
-      title: 'Sales',
-      participant: 'Rachel Green',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-cyan-500 to-blue-600'
-    },
-    {
-      id: 'participant8',
-      title: 'Support',
-      participant: 'Kevin Lee',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-red-500 to-pink-600'
-    },
-    {
-      id: 'participant9',
-      title: 'HR',
-      participant: 'Jessica Wang',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-emerald-500 to-teal-600'
-    },
-    {
-      id: 'participant10',
-      title: 'Finance',
-      participant: 'Robert Kim',
-      isPresenter: false,
-      color: 'bg-gradient-to-br from-violet-500 to-purple-600'
-    }
-  ];
+  const [currentVideoCount, setCurrentVideoCount] = React.useState(8);
+  const [customVideos, setCustomVideos] = React.useState<IVideoItem[]>(getRandomVideos(8));
+
+  const handleVideoCountChange = (count: number) => {
+    setCurrentVideoCount(count);
+  };
+
+  React.useEffect(() => {
+    setCustomVideos(getRandomVideos(currentVideoCount));
+  }, [currentVideoCount]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100">
       <div className="container mx-auto py-8 px-4">
+        <SimpleControls
+          currentVideoCount={currentVideoCount}
+          onVideoCountChange={handleVideoCountChange}
+        />
         <HybridPinBoard
-          gridSize={4}
-          maxVideos={20}
+          currentVideoCount={currentVideoCount}
           videos={customVideos}
           className="mb-8"
         />
