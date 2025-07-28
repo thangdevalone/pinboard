@@ -1,9 +1,8 @@
-import * as React from 'react';
-import {useEffect, useState} from 'react';
-import {AnimatePresence, motion} from 'framer-motion';
-import VideoItem from './VideoItem';
-import type {IPinnedVideo, IVideoItem} from './types';
-import {X} from 'lucide-react';
+import { AnimatePresence, motion } from "framer-motion";
+import * as React from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import VideoItem from "./VideoItem";
+import type { IPinnedVideo, IVideoItem } from "./types";
 
 interface HybridPinBoardProps {
   videos?: IVideoItem[];
@@ -16,10 +15,20 @@ interface HybridPinBoardProps {
 const calculateGridSize = (videoCount: number): number => {
   if (videoCount <= 1) return 1;
   if (videoCount <= 4) return 2;
-  if (videoCount <= 9) return 3;
   if (videoCount <= 16) return 4;
-  if (videoCount <= 25) return 5;
+  if (videoCount <= 25) return 6;
   return 6;
+};
+
+// Responsive grid columns based on screen size
+const getResponsiveGridColumns = (hasLargeView: boolean, gridSize: number): string => {
+  if (hasLargeView) {
+    // When there's presenter or pinned video, use fixed layout
+    return `repeat(${gridSize}, minmax(0, 1fr))`;
+  } else {
+    // When no large view, use responsive columns
+    return `repeat(auto-fit, minmax(200px, 1fr))`;
+  }
 };
 
 const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
@@ -34,12 +43,56 @@ const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
   const [pinnedVideo, setPinnedVideo] = useState<IPinnedVideo | null>(null);
   const [presenterVideo, setPresenterVideo] = useState<IVideoItem | null>(null);
   const [showExpandedVideoList, setShowExpandedVideoList] = useState(false);
-
+  const pinBoardRef = useRef<HTMLDivElement>(null);
+  const [pinboardSize, setPinboardSize] = useState<number>(0);
+  const presenterRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef<HTMLDivElement>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  
+  const gridSize = useMemo(() => calculateGridSize(currentVideoCount), [currentVideoCount]);
+  
   useEffect(() => {
     setCurrentVideoCount(initialVideoCount);
   }, [initialVideoCount]);
 
-  const gridSize = calculateGridSize(currentVideoCount);
+  // Resize observer to track pinboard size changes
+  useEffect(() => {
+    if (pinBoardRef.current) {
+      const updateSize = () => {
+        if (pinBoardRef.current) {
+          setPinboardSize(pinBoardRef.current.offsetHeight);
+        }
+      };
+
+      // Initial size
+      updateSize();
+
+      // Create ResizeObserver for better performance
+      resizeObserverRef.current = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === pinBoardRef.current) {
+            updateSize();
+          }
+        }
+      });
+
+      resizeObserverRef.current.observe(pinBoardRef.current);
+
+      // Fallback for older browsers
+      const handleResize = () => {
+        updateSize();
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        if (resizeObserverRef.current) {
+          resizeObserverRef.current.disconnect();
+        }
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (initialVideos.length > 0) {
@@ -48,144 +101,157 @@ const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
     }
   }, [initialVideos, currentVideoCount]);
 
-  const handlePinVideo = (video: IVideoItem) => {
+  const handlePinVideo = useCallback((video: IVideoItem) => {
     if (pinnedVideo?.id === video.id) {
-      // Unpin current video
       setPinnedVideo(null);
       onVideoUnpin?.(video);
+      // Close expanded video list when unpinning
+      if (showExpandedVideoList) {
+        setShowExpandedVideoList(false);
+      }
     } else {
-      // Pin new video
       const newPinnedVideo: IPinnedVideo = {
         ...video,
-        pinnedAt: new Date()
+        pinnedAt: new Date(),
       };
       setPinnedVideo(newPinnedVideo);
       onVideoPin?.(video);
     }
-  };
+  }, [pinnedVideo?.id, onVideoUnpin, onVideoPin, showExpandedVideoList]);
 
-  const handlePresentVideo = (video: IVideoItem) => {
+  const handlePresentVideo = useCallback((video: IVideoItem) => {
     if (presenterVideo?.id === video.id) {
-      // Remove presenter
       setPresenterVideo(null);
+      if (showExpandedVideoList) {
+        setShowExpandedVideoList(false);
+      }
     } else {
-      // Set as presenter
       setPresenterVideo(video);
     }
-  };
-  const otherVideos = videos.filter(video =>
-    video.id !== presenterVideo?.id && video.id !== pinnedVideo?.id
+  }, [presenterVideo?.id, showExpandedVideoList]);
+
+  const handleToggleExpandedList = useCallback(() => {
+    setShowExpandedVideoList(prev => !prev);
+  }, []);
+
+  const otherVideos = useMemo(() => 
+    videos.filter(
+      (video) => video.id !== presenterVideo?.id && video.id !== pinnedVideo?.id
+    ), [videos, presenterVideo?.id, pinnedVideo?.id]
   );
 
-  const hasDualView = presenterVideo && pinnedVideo;
-  const hasLargeView = presenterVideo || pinnedVideo;
+  const hasDualView = useMemo(() => presenterVideo && pinnedVideo, [presenterVideo, pinnedVideo]);
+  const hasLargeView = useMemo(() => presenterVideo || pinnedVideo, [presenterVideo, pinnedVideo]);
 
-  const videoItemWidth = 140;
-  const containerPadding = 48;
+  const stripVideos = useMemo(() => 
+    otherVideos.slice(
+      0,
+      hasLargeView ? gridSize - 1 : gridSize * gridSize
+    ), [otherVideos, hasLargeView, gridSize]
+  );
+  
+  const hasMoreVideos = useMemo(() => 
+    otherVideos.length > stripVideos.length, [otherVideos.length, stripVideos.length]
+  );
 
-  const availableWidth = typeof window !== 'undefined'
-    ? window.innerWidth - containerPadding
-    : 1200;
-
-  const maxVisibleVideos = Math.floor(availableWidth / videoItemWidth);
-  const canShowMoreButton = otherVideos.length > maxVisibleVideos;
-
-  const actualVisibleVideos = canShowMoreButton ? maxVisibleVideos - 1 : maxVisibleVideos;
-  const stripVideos = otherVideos.slice(0, actualVisibleVideos);
-  const hasMoreVideos = otherVideos.length > actualVisibleVideos;
-  const remainingVideos = otherVideos.slice(actualVisibleVideos);
-
-  console.log(videos);
+  // Memoize grid styles to prevent unnecessary re-renders
+  const gridStyles = useMemo(() => {
+    if (hasLargeView) {
+      if (hasDualView) {
+        // When both presenter and pinned, use 2-row layout
+        return {
+          gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(2, minmax(0, 1fr))`,
+          aspectRatio: "16/9",
+        };
+      } else {
+        // When only one large view, use single row
+        return {
+          gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${gridSize - 1}, minmax(0, 1fr)) auto`,
+          aspectRatio: "16/9",
+        };
+      }
+    } else {
+      // When no large view, use responsive columns
+      return {
+        gridTemplateColumns: `repeat(auto-fit, minmax(200px, 1fr))`,
+        gridTemplateRows: `repeat(auto-fit, minmax(150px, 1fr))`,
+        aspectRatio: "auto",
+      };
+    }
+  }, [gridSize, hasLargeView, hasDualView]);
 
   return (
-
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Video Meeting ({currentVideoCount} participants)
-          {presenterVideo && (
-            <span className="ml-2 text-sm text-green-600">
-                - {presenterVideo.participant} (Presenter)
-              </span>
-          )}
-          {pinnedVideo && (
-            <span className="ml-2 text-sm text-blue-600">
-                - {pinnedVideo.participant} (Pinned)
-              </span>
-          )}
-        </h3>
-      </div>
-
+    <div className={`flex gap-2 ${showExpandedVideoList ? 'md:flex-row flex-col' : 'flex-col'}`}>
       <motion.div
         layout
-        className={showExpandedVideoList ? "flex gap-3" : "grid gap-3"}
-        style={showExpandedVideoList ? {} : {
-          gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
-          gridTemplateRows: hasLargeView
-            ? `repeat(${gridSize - 1}, minmax(0, 1fr)) auto`
-            : `repeat(${gridSize}, minmax(0, 1fr))`
-        }}
+        ref={pinBoardRef}
+        className={`grid flex-1 gap-1`}
+        style={gridStyles}
       >
-        <AnimatePresence>
-          {presenterVideo && (
-            <motion.div
-              key={`presenter-${presenterVideo.id}`}
-              layout
-              initial={{opacity: 0, scale: 0.8}}
-              animate={{opacity: 1, scale: 1}}
-              exit={{opacity: 0, scale: 0.8}}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut"
-              }}
-              className={`relative aspect-video ${showExpandedVideoList ? 'flex-1' : 'w-full'}`}
-              style={showExpandedVideoList ? {} : {
-                gridColumn: hasDualView
-                  ? `1 / ${Math.ceil(gridSize / 2) + 1}`
-                  : `1 / ${gridSize + 1}`,
-                gridRow: `1 / ${gridSize}`
-              }}
-            >
-              <VideoItem
-                video={presenterVideo}
-                isPresenter={true}
-                onPinClick={() => handlePinVideo(presenterVideo)}
-                onPresentClick={() => handlePresentVideo(presenterVideo)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <AnimatePresence>
+            {presenterVideo && (
+              <motion.div
+                key={`presenter-${presenterVideo.id}`}
+                ref={presenterRef}
+                layout
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeInOut",
+                }}
+                className="relative w-full h-full"
+                style={{
+                  gridColumn: hasDualView
+                    ? `1 / ${Math.ceil(gridSize / 2) + 1}`
+                    : `1 / ${gridSize + 1}`,
+                  gridRow: hasDualView ? `1 / 2` : `1 / ${gridSize}`,
+                }}
+              >
+                <VideoItem
+                  video={presenterVideo}
+                  isPresenter={true}
+                  onPinClick={() => handlePinVideo(presenterVideo)}
+                  onPresentClick={() => handlePresentVideo(presenterVideo)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Pinned Video Area */}
-        <AnimatePresence>
-          {pinnedVideo && (
-            <motion.div
-              key={`pinned-${pinnedVideo.id}`}
-              layout
-              initial={{opacity: 0, scale: 0.8}}
-              animate={{opacity: 1, scale: 1}}
-              exit={{opacity: 0, scale: 0.8}}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut"
-              }}
-              className={`relative aspect-video ${showExpandedVideoList ? 'flex-1' : 'w-full'}`}
-              style={showExpandedVideoList ? {} : {
-                gridColumn: hasDualView
-                  ? `${Math.ceil(gridSize / 2) + 1} / ${gridSize + 1}` // Right half when dual view
-                  : `1 / ${gridSize + 1}`, // Full width when solo
-                gridRow: `1 / ${gridSize}`
-              }}
-            >
-              <VideoItem
-                video={pinnedVideo}
-                isPinned={true}
-                onPinClick={() => handlePinVideo(pinnedVideo)}
-                onPresentClick={() => handlePresentVideo(pinnedVideo)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Pinned Video Area */}
+          <AnimatePresence>
+            {pinnedVideo && (
+              <motion.div
+                key={`pinned-${pinnedVideo.id}`}
+                ref={pinnedRef}
+                layout
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{
+                  duration: 0.3,
+                  ease: "easeInOut",
+                }}
+                className="relative w-full h-full"
+                style={{
+                  gridColumn: hasDualView
+                    ? `${Math.ceil(gridSize / 2) + 1} / ${gridSize + 1}`
+                    : `1 / ${gridSize + 1}`,
+                  gridRow: hasDualView ? `2 / 3` : `1 / ${gridSize}`,
+                }}
+              >
+                <VideoItem
+                  video={pinnedVideo}
+                  isPinned={true}
+                  onPinClick={() => handlePinVideo(pinnedVideo)}
+                  onPresentClick={() => handlePresentVideo(pinnedVideo)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         {/* Grid Items (when no large view and not expanded) */}
         {!hasLargeView && !showExpandedVideoList && (
@@ -197,11 +263,11 @@ const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
                 <motion.div
                   key={video.id}
                   layout
-                  initial={{opacity: 0, scale: 0.8}}
-                  animate={{opacity: 1, scale: 1}}
-                  exit={{opacity: 0, scale: 0.8}}
-                  transition={{duration: 0.4, ease: [0.4, 0, 0.2, 1]}}
-                  className="relative min-h-[120px]"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                  className="relative w-full h-full"
                 >
                   <VideoItem
                     video={video}
@@ -216,31 +282,26 @@ const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
           </AnimatePresence>
         )}
 
-
-        {hasLargeView && otherVideos.length > 0 && !showExpandedVideoList && (
-          <motion.div
-            layout
-            className="flex flex-row gap-2 overflow-x-auto pb-2 video-strip-scrollbar"
-            style={{
-              gridColumn: `1 / ${gridSize + 1}`,
-              gridRow: gridSize,
-              minHeight: '80px'
-            }}
-          >
+        {(pinnedVideo || presenterVideo) &&
+          otherVideos.length > 0 &&
+          !showExpandedVideoList && (
             <AnimatePresence>
               {stripVideos.map((video) => (
                 <motion.div
                   key={video.id}
                   layout
-                  initial={{opacity: 0, x: 20}}
-                  animate={{opacity: 1, x: 0}}
-                  exit={{opacity: 0, x: -20}}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   transition={{
                     duration: 0.4,
                     ease: [0.4, 0, 0.2, 1],
-                    delay: 0.1
+                    delay: 0.1,
                   }}
-                  className="flex-shrink-0 w-32 h-24 aspect-video"
+                  className="w-full h-full"
+                  style={{
+                    gridRow: hasDualView ? `3 / ${gridSize + 1}` : `auto`,
+                  }}
                 >
                   <VideoItem
                     video={video}
@@ -256,93 +317,115 @@ const HybridPinBoard: React.FC<HybridPinBoardProps> = (props) => {
               {hasMoreVideos && (
                 <motion.div
                   layout
-                  initial={{opacity: 0, x: 20}}
-                  animate={{opacity: 1, x: 0}}
-                  exit={{opacity: 0, x: -20}}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   transition={{
                     duration: 0.4,
                     ease: [0.4, 0, 0.2, 1],
-                    delay: 0.1
+                    delay: 0.1,
                   }}
-                  className="flex-shrink-0 w-32 h-24 aspect-video"
+                  className="w-full h-full"
+                  style={{
+                    gridRow: hasDualView ? `3 / ${gridSize + 1}` : `auto`,
+                  }}
                 >
                   <button
-                    onClick={() => setShowExpandedVideoList(true)}
+                    onClick={handleToggleExpandedList}
                     className="w-full h-full bg-gray-700 hover:bg-gray-600 rounded-lg flex flex-col items-center justify-center text-white transition-colors"
                   >
                     <span className="text-2xl mb-1">⋯</span>
-                    <span className="text-xs">+{remainingVideos.length} More</span>
+                    <span className="text-xs">
+                      +{otherVideos.length - stripVideos.length} More
+                    </span>
                   </button>
                 </motion.div>
               )}
-
-
             </AnimatePresence>
+          )}
+      </motion.div>
 
-
-          </motion.div>
-        )}
-
-        {/* Expanded video list - 2 columns on the right side */}
-        {hasLargeView && showExpandedVideoList && (
+      {/* Expanded video list - responsive layout */}
+      <AnimatePresence>
+        {showExpandedVideoList && (
           <motion.div
             layout
-            initial={{opacity: 0, x: 50}}
-            animate={{opacity: 1, x: 0}}
-            exit={{opacity: 0, x: 50}}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
             transition={{
               duration: 0.3,
-              ease: [0.4, 0, 0.2, 1]
+              ease: [0.4, 0, 0.2, 1],
             }}
-            className="grid grid-cols-2 gap-2 overflow-y-auto pb-2 video-strip-scrollbar bg-gray-800 rounded-lg p-3 flex-shrink-0"
-
+            className="w-full md:w-80"
           >
-            <AnimatePresence>
-              {otherVideos.map((video) => (
-                <motion.div
-                  key={video.id}
-                  layout
-                  initial={{opacity: 0, scale: 0.8}}
-                  animate={{opacity: 1, scale: 1}}
-                  exit={{opacity: 0, scale: 0.8}}
-                  transition={{
-                    duration: 0.3,
-                    ease: [0.4, 0, 0.2, 1]
-                  }}
-                  className="w-30 h-20"
-                >
-                  <VideoItem
-                    video={video}
-                    isPinned={pinnedVideo?.id === video.id}
-                    isPresenter={presenterVideo?.id === video.id}
-                    onPinClick={() => handlePinVideo(video)}
-                    onPresentClick={() => handlePresentVideo(video)}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {/* Mobile: Horizontal scroll below main grid */}
+            <div className="md:hidden flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+              <AnimatePresence>
+                {otherVideos.map((video) => (
+                  <motion.div
+                    key={video.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{
+                      duration: 0.3,
+                      ease: [0.4, 0, 0.2, 1],
+                    }}
+                    className="w-40 aspect-video flex-shrink-0"
+                  >
+                    <VideoItem
+                      video={video}
+                      isPinned={pinnedVideo?.id === video.id}
+                      isPresenter={presenterVideo?.id === video.id}
+                      onPinClick={() => handlePinVideo(video)}
+                      onPresentClick={() => handlePresentVideo(video)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
-            <motion.div
-              layout
-              initial={{opacity: 0, scale: 0.8}}
-              animate={{opacity: 1, scale: 1}}
-              exit={{opacity: 0, scale: 0.8}}
-              transition={{
-                duration: 0.3,
-                ease: [0.4, 0, 0.2, 1]
-              }}
-              className="col-span-2 h-12 mt-2"
-            >
-              <button
-                onClick={() => setShowExpandedVideoList(false)}
-                className="w-full h-full bg-gray-600 hover:bg-gray-500 rounded-lg flex items-center justify-center text-white transition-colors"
+            {/* Desktop: Vertical scroll beside main grid */}
+            <div className="hidden md:block">
+              <div 
+                className="custom-scrollbar overflow-y-auto"
+                style={{
+                  maxHeight: pinboardSize,
+                }}
               >
-                <X className="w-4 h-4"/>
-              </button>
-            </motion.div>
+                <div className="grid grid-cols-1 gap-2">
+                  <AnimatePresence>
+                    {otherVideos.map((video) => (
+                      <motion.div
+                        key={video.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{
+                          duration: 0.3,
+                          ease: [0.4, 0, 0.2, 1],
+                        }}
+                        className="w-full aspect-video"
+                      >
+                        <VideoItem
+                          video={video}
+                          isPinned={pinnedVideo?.id === video.id}
+                          isPresenter={presenterVideo?.id === video.id}
+                          onPinClick={() => handlePinVideo(video)}
+                          onPresentClick={() => handlePresentVideo(video)}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
-      </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

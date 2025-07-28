@@ -38,35 +38,39 @@ const VideoItem: React.FC<VideoItemProps> = (props) => {
       animate={isPinned ? "pinned" : "unpinned"}
       onClick={handleClick}
       className={`
-        relative rounded-lg overflow-hidden select-none
+        relative rounded-lg overflow-hidden select-none w-full h-full bg-black
         ${isPinned
-        ? 'w-full h-full bg-gray-900'
-        : 'w-full h-full bg-gray-800 hover:bg-gray-700'
+        ? 'bg-black'
+        : 'bg-black hover:bg-gray-900'
       }
         transition-colors duration-200
         ${className}
       `}
     >
-      <div className="relative w-full h-full flex items-center justify-center bg-gray-900">
-        {video.videoUrl ? (
-          <video
-            className="w-full h-full object-cover"
-            src={video.videoUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
-        ) : (
-          <div className={`
-            w-full h-full flex items-center justify-center
-            ${video.color || 'bg-gradient-to-br from-blue-500 to-purple-600'}
-          `}>
-            <div className="absolute inset-0 bg-black bg-opacity-20"/>
-          </div>
-        )}
+      {/* Container chiếm hết không gian với background đen */}
+      <div className="relative w-full h-full flex items-center justify-center bg-black">
+        {/* Video container với aspect ratio 16:9 */}
+        <div className="relative w-full h-full flex items-center justify-center">
+          {video.videoUrl ? (
+            <video
+              className="w-full h-full object-contain"
+              src={video.videoUrl}
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          ) : (
+            <div className={`
+              w-full h-full flex items-center justify-center
+              ${video.color || 'bg-gradient-to-br from-blue-500 to-purple-600'}
+            `}>
+              <div className="absolute inset-0 bg-black bg-opacity-20"/>
+            </div>
+          )}
+        </div>
 
-        <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+        <div className="absolute bottom-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded line-clamp-1">
           {video.participant || video.title}
         </div>
 
@@ -100,10 +104,11 @@ const VideoItem: React.FC<VideoItemProps> = (props) => {
             <Pin className={`w-4 h-4 ${isPinned ? 'fill-current' : ''}`}/>
           </button>
         </div>
-
       </div>
     </motion.div>
   );
 };
 
-export default VideoItem;
+const MemoizedVideoItem = React.memo(VideoItem);
+
+export default MemoizedVideoItem;
